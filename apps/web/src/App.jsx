@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import * as TON_CONNECT_UI from '@tonconnect/ui';
+import { beginCell } from "@ton/core";
 
+// Protocol constants
 const CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m";
+const LEVERAGE = 150;
+const THRESHOLD = 1 / LEVERAGE;
 
 const AudioEngine = {
     ctx: null,
@@ -30,6 +34,18 @@ const AudioEngine = {
     }
 };
 
+/**
+ * Encode bet using canonical protocol format (v1)
+ */
+function encodeBetPayload(roundId, side) {
+    return beginCell()
+        .storeUint(roundId, 32)
+        .storeBit(side === 'LONG')
+        .endCell()
+        .toBoc()
+        .toString('base64');
+}
+
 function App() {
     const [screen, setScreen] = useState('GAME'); // GAME, PROFILE, HELP
     const [livePrice, setLivePrice] = useState(null);
@@ -57,6 +73,7 @@ function App() {
     useEffect(() => {
         const fetchPrice = async () => {
             try {
+                // In production, this would call our Oracle Aggregator API
                 const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd');
                 const data = await res.json();
                 const val = data?.['the-open-network']?.usd;
@@ -64,7 +81,9 @@ function App() {
                     setLivePrice(val);
                     setStartPrice(prev => prev === null ? val : prev);
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error('Price fetch error:', e);
+            }
         };
         fetchPrice();
         const interval = setInterval(fetchPrice, 5000);
@@ -88,8 +107,9 @@ function App() {
                 const newPath = [...prev.slice(1)];
                 let nextY = 10;
                 if (startPrice && livePrice) {
-                    const delta = Math.abs(livePrice - startPrice);
-                    nextY = (delta / 0.033) * 90 + (Math.random() - 0.5) * 5;
+                    const delta = (livePrice - startPrice) / startPrice;
+                    // Scale chart based on threshold
+                    nextY = (delta / THRESHOLD) * 50 + 50;
                 }
                 return [...newPath, Math.min(Math.max(nextY, 5), 100)];
             });
@@ -102,25 +122,33 @@ function App() {
         AudioEngine.sfx.lock();
         setIsBetting(true);
         try {
-            const buffer = new ArrayBuffer(9);
-            const view = new DataView(buffer);
-            view.setUint32(0, 4, false);
-            view.setUint32(4, round, false);
-            view.setUint8(8, selectedSide === 'LONG' ? 1 : 0);
-            const payload = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+            // Use canonical encoding
+            const payload = encodeBetPayload(round, selectedSide);
 
             await tonConnectUI.sendTransaction({
                 validUntil: Math.floor(Date.now() / 1000) + 300,
-                messages: [{ address: CONTRACT_ADDRESS, amount: (parseFloat(betAmount) * 1e9).toString(), payload }]
+                messages: [{ 
+                    address: CONTRACT_ADDRESS, 
+                    amount: (parseFloat(betAmount) * 1e9).toString(), 
+                    payload 
+                }]
             });
 
-            const newEntry = { round, amount: betAmount, side: selectedSide, time: new Date().toLocaleTimeString() };
+            const newEntry = { 
+                round, 
+                amount: betAmount, 
+                side: selectedSide, 
+                time: new Date().toLocaleTimeString(),
+                status: 'PENDING'
+            };
             const updatedHistory = [newEntry, ...history].slice(0, 10);
             setHistory(updatedHistory);
             localStorage.setItem('bl_history', JSON.stringify(updatedHistory));
         } catch (e) {
-            console.error(e);
-        } finally { setIsBetting(false); }
+            console.error('Betting error:', e);
+        } finally { 
+            setIsBetting(false); 
+        }
     };
 
     const chartPoints = pricePath.map((y, i) => `${i * (100 / 39)},${100 - y}`).join(' ');
@@ -150,7 +178,7 @@ function App() {
 
                 <div className="gba-screen-bezel w-full p-4 mb-10">
                     <div className="flex justify-center mb-3">
-                        <span className="text-[7px] text-gray-600 tracking-[0.5em] uppercase font-bold" style={{fontFamily: "'Press Start 2P'"}}>▶ BLINDLIQ ADVANCE ◀</span>
+                        <span className="text-[7px] text-gray-600 tracking-[0.5em] uppercase font-bold" style={{fontFamily: "'Press Start 2P'"}}>▶ TON_TATION ADVANCE ◀</span>
                     </div>
 
                     <div className="gba-screen aspect-[4/3] rounded-sm overflow-hidden border-2 border-black">
@@ -175,7 +203,7 @@ function App() {
                                     <div className="flex justify-between items-center mb-4">
                                         <div className="flex flex-col">
                                             <span className="text-[7px] text-green-900 uppercase font-black tracking-widest">Risk Level</span>
-                                            <span className="text-[10px] text-green-500 italic">150.00x MAX_LEVERAGE</span>
+                                            <span className="text-[10px] text-green-500 italic">{LEVERAGE.toFixed(2)}x MAX_LEVERAGE</span>
                                         </div>
                                         <span className={`text-5xl font-black ${timeLeft <= 10 ? 'text-red-500 animate-pixel-blink' : 'text-green-500'}`}>
                                             :{timeLeft.toString().padStart(2, '0')}
@@ -248,14 +276,6 @@ function App() {
                                             )}
                                         </div>
                                     </div>
-                                    {walletAddress && (
-                                        <button
-                                            onClick={() => tonConnectUI.disconnect() && navTo('GAME')}
-                                            className="mt-4 w-full py-2 border-2 border-red-900 text-red-500 font-bold hover:bg-red-500 hover:text-black transition-all text-[10px]"
-                                        >
-                                            TERMINATE_SESSION (DISCONNECT)
-                                        </button>
-                                    )}
                                 </div>
                             )}
 
@@ -265,23 +285,11 @@ function App() {
                                         <span className="text-sm font-black tracking-tighter">SYSTEM_MANUAL</span>
                                         <button onClick={()=>navTo('GAME')} className="text-[10px] border border-green-900 px-2">EXIT</button>
                                     </div>
-                                    <div className="flex-1 crt-scrollbar overflow-y-auto space-y-4 pr-2 text-[8px] leading-relaxed text-green-500/80">
-                                        <section>
-                                            <h4 className="text-green-400 font-bold mb-1 uppercase tracking-widest text-[10px]">How to Trade</h4>
-                                            <p>Rounds cycle every 60s. Use Start/Select to navigate. 150x leverage means a price move of $0.033 results in 100% PnL move. Liquidity locks at 15s remaining.</p>
-                                        </section>
-                                        <section>
-                                            <h4 className="text-green-400 font-bold mb-1 uppercase tracking-widest text-[10px]">Oracle Data</h4>
-                                            <p>Price data is streamed from Decentralized Oracles (CoinGecko Simple Price API). All trades are settled via TON Smart Contract kQBJ..._m.</p>
-                                        </section>
-                                        <section className="border-t border-red-900/30 pt-2">
-                                            <h4 className="text-red-500 font-bold mb-1 uppercase tracking-widest text-[10px]">Liability Statement</h4>
-                                            <p className="text-red-600 font-bold italic">CAUTION: HIGH LEVERAGE TRADING IS EXTREMELY RISKY. 150X MULTIPLIER CAN RESULT IN INSTANT CAPITAL LOSS.</p>
-                                            <p className="mt-1">By accessing this interface, you acknowledge that BLIND LIQ™ and its developers are NOT liable for any financial losses, smart contract failures, or oracle inaccuracies. This is an experimental high-leverage protocol.</p>
-                                        </section>
-                                        <section className="text-[6px] opacity-40 uppercase">
-                                            Build_v1.0.4 | Secure_Channel_Established | End_of_Line
-                                        </section>
+                                    <div className="flex-1 crt-scrollbar overflow-y-auto space-y-4 pr-2 text-[9px] leading-relaxed">
+                                        <p><span className="text-green-600 font-bold">01. OBJECTIVE:</span> Predict price movement over 60s rounds. Zero-sum redistribution.</p>
+                                        <p><span className="text-green-600 font-bold">02. THRESHOLD:</span> 150x leverage requires ±0.667% movement for a binary win/loss.</p>
+                                        <p><span className="text-green-600 font-bold">03. LOCK:</span> Betting closes at T-15s to prevent front-running.</p>
+                                        <p><span className="text-green-600 font-bold">04. PAYOUT:</span> Winning pool takes losing pool minus 0.01% fee.</p>
                                     </div>
                                 </div>
                             )}
@@ -290,42 +298,149 @@ function App() {
                     </div>
                 </div>
 
-                <div className="w-full flex justify-between items-center px-4">
-                     <div className="gba-dpad">
-                        <div className="gba-dpad-part gba-dpad-v"></div>
-                        <div className="gba-dpad-part gba-dpad-h"></div>
-                        <div className="gba-dpad-center"></div>
-                     </div>
+                <div className="w-full flex justify-between items-start px-4">
+                    <div className="flex flex-col items-center gap-6">
+                        <div className="gba-dpad">
+                            <div className="up" onClick={() => AudioEngine.sfx.tick()}></div>
+                            <div className="down" onClick={() => AudioEngine.sfx.tick()}></div>
+                            <div className="left" onClick={() => AudioEngine.sfx.tick()}></div>
+                            <div className="right" onClick={() => AudioEngine.sfx.tick()}></div>
+                        </div>
+                    </div>
 
-                     <div className="flex flex-col items-center gap-6">
-                        <div className="flex gap-6">
-                            <div className="flex flex-col items-center gap-1 rubber-btn" onClick={()=>navTo('HELP')}>
-                                <div className="w-10 h-3 bg-black/40 rounded-full rotate-[-20deg] border-b border-white/5 shadow-inner"></div>
-                                <span className="text-[6px] text-indigo-900 font-bold uppercase" style={{fontFamily: "'Press Start 2P'"}}>Select</span>
+                    <div className="flex flex-col items-center gap-12 pt-8">
+                        <div className="flex gap-6 -rotate-12">
+                            <div className="flex flex-col items-center gap-2">
+                                <button onClick={() => navTo('PROFILE')} className="gba-btn-pill"></button>
+                                <span className="text-[7px] text-indigo-900 font-black tracking-tighter">SELECT</span>
                             </div>
-                            <div className="flex flex-col items-center gap-1 rubber-btn" onClick={()=>navTo('PROFILE')}>
-                                <div className="w-10 h-3 bg-black/40 rounded-full rotate-[-20deg] border-b border-white/5 shadow-inner"></div>
-                                <span className="text-[6px] text-indigo-900 font-bold uppercase" style={{fontFamily: "'Press Start 2P'"}}>Start</span>
+                            <div className="flex flex-col items-center gap-2">
+                                <button onClick={() => navTo('HELP')} className="gba-btn-pill"></button>
+                                <span className="text-[7px] text-indigo-900 font-black tracking-tighter">START</span>
                             </div>
                         </div>
-                     </div>
-
-                     <div className="gba-btn-group">
-                        <button className="gba-btn btn-b" onClick={()=>navTo('GAME')}>B</button>
-                        <button className="gba-btn btn-a" onClick={()=>screen === 'GAME' ? placeBet() : navTo('GAME')}>A</button>
-                     </div>
-                </div>
-
-                <div className="mt-12 w-full flex justify-between items-end px-4">
-                    <div className="gba-speaker">
-                        {[...Array(12)].map((_, i) => <div key={i} className="speaker-hole"></div>)}
+                        <div className="flex flex-col items-end gap-1 opacity-20">
+                            <div className="w-12 h-1 bg-indigo-900/40 rounded-full"></div>
+                            <div className="w-12 h-1 bg-indigo-900/40 rounded-full"></div>
+                            <div className="w-12 h-1 bg-indigo-900/40 rounded-full"></div>
+                        </div>
                     </div>
-                    <div className="flex flex-col items-end">
-                        <span className="text-[12px] text-indigo-900 font-black italic tracking-tighter" style={{fontFamily: "'Press Start 2P'"}}>BLIND LIQ™</span>
-                        <span className="text-[7px] text-indigo-800 font-bold tracking-widest">ADVANCE SP</span>
+
+                    <div className="flex flex-col items-center gap-4">
+                        <div className="flex gap-6 pt-4">
+                            <div className="flex flex-col items-center gap-2">
+                                <button onClick={placeBet} className="gba-btn-circle secondary"></button>
+                                <span className="text-[10px] text-indigo-900 font-black">B</span>
+                            </div>
+                            <div className="flex flex-col items-center gap-2 -mt-6">
+                                <button onClick={placeBet} className="gba-btn-circle primary"></button>
+                                <span className="text-[10px] text-indigo-900 font-black">A</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <style>{`
+                :root { --crt-green: #4ade80; }
+                .gba-shell {
+                    background: #2e1065;
+                    border-radius: 20px 20px 100px 20px;
+                    box-shadow: 
+                        inset 0 4px 0 rgba(255,255,255,0.1),
+                        0 20px 50px rgba(0,0,0,0.5),
+                        0 0 0 4px #1e1b4b;
+                    position: relative;
+                }
+                .gba-shoulder {
+                    position: absolute;
+                    top: -10px;
+                    width: 80px;
+                    height: 20px;
+                    background: #1e1b4b;
+                    border-radius: 10px 10px 0 0;
+                }
+                .gba-shoulder.left { left: 40px; }
+                .gba-shoulder.right { right: 40px; }
+                .pwr-led {
+                    width: 6px;
+                    height: 6px;
+                    background: #ef4444;
+                    border-radius: 50%;
+                    box-shadow: 0 0 8px #ef4444;
+                }
+                .gba-screen-bezel {
+                    background: #111;
+                    border-radius: 10px;
+                    box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+                }
+                .gba-screen {
+                    background: #050505;
+                    position: relative;
+                }
+                .scanline {
+                    position: absolute;
+                    inset: 0;
+                    background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+                    background-size: 100% 4px, 3px 100%;
+                    pointer-events: none;
+                    z-index: 10;
+                }
+                .screen-glare {
+                    position: absolute;
+                    inset: 0;
+                    background: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 50%);
+                    pointer-events: none;
+                    z-index: 11;
+                }
+                .crt-text {
+                    text-shadow: 0 0 8px rgba(74, 222, 128, 0.5);
+                    font-family: 'monospace';
+                }
+                .gba-dpad {
+                    width: 100px;
+                    height: 100px;
+                    background: #1e1b4b;
+                    position: relative;
+                    border-radius: 50%;
+                    box-shadow: 0 4px 0 #000;
+                }
+                .gba-dpad div {
+                    position: absolute;
+                    background: #111;
+                    cursor: pointer;
+                }
+                .gba-dpad .up { top: 10px; left: 35px; width: 30px; height: 35px; border-radius: 4px 4px 0 0; }
+                .gba-dpad .down { bottom: 10px; left: 35px; width: 30px; height: 35px; border-radius: 0 0 4px 4px; }
+                .gba-dpad .left { left: 10px; top: 35px; width: 35px; height: 30px; border-radius: 4px 0 0 4px; }
+                .gba-dpad .right { right: 10px; top: 35px; width: 35px; height: 30px; border-radius: 0 4px 4px 0; }
+                .gba-btn-circle {
+                    width: 50px;
+                    height: 50px;
+                    border-radius: 50%;
+                    background: #111;
+                    box-shadow: 0 4px 0 #000;
+                    transition: transform 0.1s;
+                }
+                .gba-btn-circle:active { transform: translateY(2px); box-shadow: 0 2px 0 #000; }
+                .gba-btn-circle.primary { background: #7c3aed; }
+                .gba-btn-circle.secondary { background: #6d28d9; }
+                .gba-btn-pill {
+                    width: 40px;
+                    height: 12px;
+                    background: #111;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 0 #000;
+                }
+                @keyframes pixel-blink {
+                    0%, 100% { opacity: 1; }
+                    50% { opacity: 0; }
+                }
+                .animate-pixel-blink { animation: pixel-blink 0.5s steps(1) infinite; }
+                .crt-scrollbar::-webkit-scrollbar { width: 4px; }
+                .crt-scrollbar::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+                .crt-scrollbar::-webkit-scrollbar-thumb { background: var(--crt-green); border-radius: 2px; }
+            `}</style>
         </div>
     );
 }

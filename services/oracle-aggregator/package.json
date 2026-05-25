@@ -1,0 +1,12 @@
+{
+  "name": "oracle-aggregator",
+  "version": "1.0.0",
+  "description": "Multi-source price oracle aggregator for TonTation settlement",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["oracle", "price", "consensus"],
+  "author": "",
+  "license": "ISC"
+}

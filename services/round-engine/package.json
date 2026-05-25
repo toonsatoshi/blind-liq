@@ -1,0 +1,15 @@
+{
+  "name": "round-engine",
+  "version": "1.0.0",
+  "description": "Authoritative round coordinator for TonTation",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["round", "coordinator", "state-machine"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "oracle-aggregator": "workspace:*"
+  }
+}
