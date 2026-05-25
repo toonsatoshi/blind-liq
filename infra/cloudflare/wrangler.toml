@@ -1,8 +1,7 @@
 name = "tontation-api"
-main = "services/api/index.ts"
+main = "../../services/api/dist/index.js"
 compatibility_date = "2024-01-01"
 account_id = "${CF_ACCOUNT_ID}"
-main = "../../services/api/dist/index.js"
 
 # Durable Objects binding
 [[durable_objects.bindings]]
