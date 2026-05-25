@@ -42,6 +42,5 @@ cwd = "./services/api"
 [observability]
 enabled = true
 
-# Limits
-[limits]
-cpu_ms = 50000
+# NOTE: CPU limits are intentionally omitted because Cloudflare Free plan
+# rejects cpu_ms with API error 100328 during versions upload.
