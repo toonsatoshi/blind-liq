@@ -33,10 +33,10 @@ script_name = "tontation"
 command = "npm run build"
 cwd = "./services/api"
 
-# Durable Objects migration for versioning
-[[migrations]]
-tag = "v1"
-new_classes = ["RoundManager"]
+
+# NOTE: Durable Object migrations are intentionally not declared here because
+# Cloudflare "versions upload" rejects version uploads that include migrations (code 10211).
+# Apply migrations through a non-versioned deploy workflow when needed.
 
 # Observability
 [observability]
