@@ -24,5 +24,11 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: services/api
-          command: deploy --config ../../infra/cloudflare/wrangler.toml
+          command: deploy --config ../../infra/cloudflare/wrangler.toml --env production
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PROD_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
+          CF_PROD_KV_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
+          CF_STAGING_DATABASE_ID: ${{ secrets.CLOUDFLARE_STAGING_D1_DATABASE_ID }}
+          CF_STAGING_KV_ID: ${{ secrets.CLOUDFLARE_STAGING_KV_NAMESPACE_ID }}
           
