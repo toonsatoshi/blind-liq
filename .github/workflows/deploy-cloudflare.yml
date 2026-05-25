@@ -20,16 +20,36 @@ jobs:
           cache: 'npm'
       - run: npm install
       - run: cd services/api && npm install && npm run build
-      - uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: services/api
-          command: deploy --config ../../infra/cloudflare/wrangler.toml --env production
+      - name: Render Wrangler config
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          template = Path('infra/cloudflare/wrangler.toml').read_text()
+          for key in [
+              'CF_ACCOUNT_ID',
+              'CF_PROD_DATABASE_ID',
+              'CF_PROD_KV_ID',
+              'CF_STAGING_DATABASE_ID',
+              'CF_STAGING_KV_ID',
+          ]:
+              template = template.replace(f'${{{key}}}', os.environ[key])
+
+          Path('/tmp/wrangler.toml').write_text(template)
+          print('Rendered /tmp/wrangler.toml')
+          print(Path('/tmp/wrangler.toml').read_text())
+          PY
         env:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_PROD_DATABASE_ID: ${{ secrets.CLOUDFLARE_D1_DATABASE_ID }}
           CF_PROD_KV_ID: ${{ secrets.CLOUDFLARE_KV_NAMESPACE_ID }}
           CF_STAGING_DATABASE_ID: ${{ secrets.CLOUDFLARE_STAGING_D1_DATABASE_ID }}
           CF_STAGING_KV_ID: ${{ secrets.CLOUDFLARE_STAGING_KV_NAMESPACE_ID }}
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: services/api
+          command: deploy --config /tmp/wrangler.toml --env production
           
