@@ -3,6 +3,8 @@
  * Cloudflare Worker implementation for user ledger and round data
  */
 
+import { RoundManager as RoundManagerImpl } from "./round-manager";
+
 export interface ApiRequest {
   method: string;
   path: string;
@@ -384,4 +386,4 @@ export default {
   } 
 };
 
-export { RoundManager } from "./round-manager";
+export class RoundManager extends RoundManagerImpl {}
