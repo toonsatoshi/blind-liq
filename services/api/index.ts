@@ -361,25 +361,25 @@ export class TonTationAPI {
  * Export handler for Cloudflare Workers
  */
 export default {
-  async fetch(request: Request, env: any): Promise<Response> {
-    const url = new URL(request.url);
-    const path = url.pathname;
+  async fetch(request, env, ctx) {
+    // write a key-value pair
+    await env.KV.put('KEY', 'VALUE');
 
-    // Route to RoundManager Durable Object for round-specific operations
-    if (path.startsWith('/api/round-manager/')) {
-      const id = env.ROUND_MANAGER.idFromName('default');
-      const roundManager = env.ROUND_MANAGER.get(id);
-      
-      // Forward request to Durable Object
-      const doRequest = new Request(
-        new URL(path.replace('/api/round-manager', ''), request.url).toString(),
-        request
-      );
-      return roundManager.fetch(doRequest);
-    }
+    // read a key-value pair
+    const value = await env.KV.get('KEY');
 
-    // Route to main API
-    const api = new TonTationAPI(env.DB);
-    return api.handleRequest(request);
-  },
+    // list all key-value pairs
+    const allKeys = await env.KV.list();
+
+    // delete a key-value pair
+    await env.KV.delete('KEY');
+
+    // return a Workers response
+    return new Response(
+      JSON.stringify({
+        value: value,
+        allKeys: allKeys,
+      }),
+    );
+  } 
 };
