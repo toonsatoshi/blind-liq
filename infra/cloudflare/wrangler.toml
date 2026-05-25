@@ -1,32 +1,31 @@
-name = "tontation-api"
+name = "tontation"
 main = "services/api/index.ts"
 compatibility_date = "2024-01-01"
-account_id = "YOUR_ACCOUNT_ID"
+account_id = "ef08ac9e9f7114e7f6926b8d2c17aac6"
 
-# Durable Objects binding
-[[durable_objects.bindings]]
-name = "ROUND_MANAGER"
-class_name = "RoundManager"
-script_name = "tontation-api"
-
-# Environment configuration
-env.production.name = "tontation-api-prod"
-env.production.routes = [
+[env.production]
+name = "tontation-api-prod"
+routes = [
   { pattern = "api.tontation.io/*", zone_name = "tontation.io" }
 ]
+vars = { ENVIRONMENT = "production", API_BASE_URL = "https://api.tontation.io", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
 
-env.staging.name = "tontation-api-staging"
-env.staging.routes = [
+[env.staging]
+name = "tontation-api-staging"
+routes = [
   { pattern = "staging-api.tontation.io/*", zone_name = "tontation.io" }
 ]
+vars = { ENVIRONMENT = "staging", API_BASE_URL = "https://staging-api.tontation.io", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
 
-# D1 Database binding
+[env.development]
+vars = { ENVIRONMENT = "development", API_BASE_URL = "http://localhost:8787", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
+
+# D1 Database bindings
 [[d1_databases]]
 binding = "DB"
 database_name = "tontation-db"
 database_id = "YOUR_DATABASE_ID"
 
-# Environment-specific D1 bindings
 [[env.production.d1_databases]]
 binding = "DB"
 database_name = "tontation-db-prod"
@@ -37,7 +36,7 @@ binding = "DB"
 database_name = "tontation-db-staging"
 database_id = "YOUR_STAGING_DATABASE_ID"
 
-# KV namespace bindings (for caching round state)
+# KV namespace bindings
 [[kv_namespaces]]
 binding = "CACHE"
 id = "YOUR_KV_NAMESPACE_ID"
@@ -50,15 +49,11 @@ id = "YOUR_PROD_KV_NAMESPACE_ID"
 binding = "CACHE"
 id = "YOUR_STAGING_KV_NAMESPACE_ID"
 
-# Environment variables
-[env.production]
-vars = { ENVIRONMENT = "production", API_BASE_URL = "https://api.tontation.io", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
-
-[env.staging]
-vars = { ENVIRONMENT = "staging", API_BASE_URL = "https://staging-api.tontation.io", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
-
-[env.development]
-vars = { ENVIRONMENT = "development", API_BASE_URL = "http://localhost:8787", CONTRACT_ADDRESS = "kQBJ8ihO3VrpqT48fK4d9dGaI4la6_OQj72p69wV-Nj0r4_m" }
+# Durable Objects bindings
+[[durable_objects.bindings]]
+name = "ROUND_MANAGER"
+class_name = "RoundManager"
+script_name = "tontation"
 
 # Build configuration
 [build]
@@ -66,10 +61,9 @@ command = "npm run build"
 cwd = "./services/api"
 
 # Durable Objects migration for versioning
-[durable_objects]
-migrations = [
-  { tag = "v1", new_classes = ["RoundManager"] }
-]
+[[migrations]]
+tag = "v1"
+new_classes = ["RoundManager"]
 
 # Observability
 [observability]
@@ -77,4 +71,4 @@ enabled = true
 
 # Limits
 [limits]
-cpu_ms = 50000  # 50 second CPU time limit for Durable Objects
+cpu_ms = 50000
