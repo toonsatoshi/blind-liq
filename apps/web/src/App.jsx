@@ -70,51 +70,72 @@ function App() {
         return () => unsubscribe();
     }, []);
 
+    // API Configuration
+    const API_BASE_URL = window.location.origin.includes('localhost') 
+        ? 'http://localhost:8787' 
+        : 'https://api.tontation.io';
+
     useEffect(() => {
-        const fetchPrice = async () => {
+        const syncWithBackend = async () => {
             try {
-                // In production, this would call our Oracle Aggregator API
+                // Fetch authoritative round state from RoundManager
+                const res = await fetch(`${API_BASE_URL}/api/round-state`);
+                if (!res.ok) throw new Error('Backend sync failed');
+                
+                const data = await res.json();
+                
+                // Sync local state with authoritative backend state
+                setRound(data.id);
+                setStartPrice(data.p0);
+                
+                // Calculate time left from backend start time
+                const elapsed = (Date.now() - data.startTime) / 1000;
+                const remaining = Math.max(0, 60 - elapsed);
+                setTimeLeft(Math.floor(remaining));
+
+                // If round just changed, play sound and reset path
+                if (data.id !== round) {
+                    AudioEngine.sfx.newRound();
+                    setPricePath(Array(40).fill(50));
+                }
+            } catch (e) {
+                console.error('Backend sync error:', e);
+                // Fallback to local simulation if backend is unavailable
+                setTimeLeft(prev => (prev <= 1 ? 60 : prev - 1));
+            }
+        };
+
+        const fetchLivePrice = async () => {
+            try {
                 const res = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd');
                 const data = await res.json();
                 const val = data?.['the-open-network']?.usd;
-                if (val) {
-                    setLivePrice(val);
-                    setStartPrice(prev => prev === null ? val : prev);
-                }
-            } catch (e) {
-                console.error('Price fetch error:', e);
-            }
+                if (val) setLivePrice(val);
+            } catch (e) {}
         };
-        fetchPrice();
-        const interval = setInterval(fetchPrice, 5000);
-        return () => clearInterval(interval);
-    }, []);
 
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTimeLeft(prev => {
-                if (prev <= 1) {
-                    AudioEngine.sfx.newRound();
-                    setRound(r => r + 1);
-                    setPricePath(Array(40).fill(10));
-                    setStartPrice(livePrice);
-                    return 60;
-                }
-                if (prev <= 10) AudioEngine.sfx.urgent();
-                return prev - 1;
-            });
+        // Initial sync
+        syncWithBackend();
+        fetchLivePrice();
+
+        // Continuous sync every second
+        const interval = setInterval(() => {
+            syncWithBackend();
+            fetchLivePrice();
+            
+            // Update chart path locally for smoothness
             setPricePath(prev => {
                 const newPath = [...prev.slice(1)];
-                let nextY = 10;
+                let nextY = 50;
                 if (startPrice && livePrice) {
                     const delta = (livePrice - startPrice) / startPrice;
-                    // Scale chart based on threshold
                     nextY = (delta / THRESHOLD) * 50 + 50;
                 }
                 return [...newPath, Math.min(Math.max(nextY, 5), 100)];
             });
         }, 1000);
-        return () => clearInterval(timer);
+
+        return () => clearInterval(interval);
     }, [round, livePrice, startPrice]);
 
     const placeBet = async () => {
@@ -122,9 +143,10 @@ function App() {
         AudioEngine.sfx.lock();
         setIsBetting(true);
         try {
-            // Use canonical encoding
+            // 1. Prepare on-chain payload
             const payload = encodeBetPayload(round, selectedSide);
 
+            // 2. Submit transaction to TON blockchain
             await tonConnectUI.sendTransaction({
                 validUntil: Math.floor(Date.now() / 1000) + 300,
                 messages: [{ 
@@ -134,6 +156,23 @@ function App() {
                 }]
             });
 
+            // 3. Register bet with authoritative backend ledger
+            try {
+                await fetch(`${API_BASE_URL}/api/bets`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        wallet_address: walletAddress,
+                        round_id: round,
+                        side: selectedSide,
+                        amount: parseFloat(betAmount)
+                    })
+                });
+            } catch (apiError) {
+                console.warn('Backend ledger registration failed, falling back to local history');
+            }
+
+            // 4. Update local history for instant feedback
             const newEntry = { 
                 round, 
                 amount: betAmount, 
@@ -144,6 +183,12 @@ function App() {
             const updatedHistory = [newEntry, ...history].slice(0, 10);
             setHistory(updatedHistory);
             localStorage.setItem('bl_history', JSON.stringify(updatedHistory));
+            
+            // 5. Sync profile to get updated stats
+            const profileRes = await fetch(`${API_BASE_URL}/api/profile/${walletAddress}`);
+            if (profileRes.ok) {
+                // Future: Update profile state
+            }
         } catch (e) {
             console.error('Betting error:', e);
         } finally { 

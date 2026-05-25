@@ -1,0 +1,15 @@
+{
+  "name": "tontation-api",
+  "version": "1.0.0",
+  "description": "TonTation Backend API service for Cloudflare Workers",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["api", "cloudflare", "workers", "ledger"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "wrangler": "^3.0.0"
+  }
+}
