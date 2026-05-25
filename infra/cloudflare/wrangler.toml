@@ -1,5 +1,5 @@
 name = "tontation-api"
-main = "src/index.ts"
+main = "services/api/index.ts"
 compatibility_date = "2024-01-01"
 account_id = "YOUR_ACCOUNT_ID"
 
