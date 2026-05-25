@@ -4,12 +4,17 @@
   "description": "TonTation Backend API service for Cloudflare Workers",
   "main": "index.ts",
   "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "build": "tsc",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["api", "cloudflare", "workers", "ledger"],
   "author": "",
   "license": "ISC",
-  "dependencies": {
-    "wrangler": "^3.0.0"
+  "devDependencies": {
+    "wrangler": "^3.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
   }
 }

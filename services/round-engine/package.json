@@ -8,8 +8,5 @@
   },
   "keywords": ["round", "coordinator", "state-machine"],
   "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "oracle-aggregator": "workspace:*"
-  }
+  "license": "ISC"
 }

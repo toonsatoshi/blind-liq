@@ -33,14 +33,14 @@ export class RoundManager {
     this.state = state;
     this.env = env;
     this.db = env.DB;
+    this.currentRound = this.initializeRound(1); // Initialize with default round
 
-    // Initialize state
+    // Initialize state from storage
     this.state.blockConcurrencyWhile(async () => {
       const stored = await this.state.storage.get('currentRound');
       if (stored) {
         this.currentRound = stored;
       } else {
-        this.currentRound = this.initializeRound(1);
         await this.state.storage.put('currentRound', this.currentRound);
       }
     });
